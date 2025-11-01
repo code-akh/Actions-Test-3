@@ -1,0 +1,76 @@
+name: dependency-caching
+on:
+  push:
+    branches:
+      - main
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Step1 - Checkout code
+        uses: actions/checkout@v4
+      - name: Cache dependencies
+        uses: actions/cache@v3
+        with:
+          path: ~/.npm
+          key: deps-node-modules-${{ hashFiles('**/package-lock.json') }}
+      - name: Step2 - Install dependencies
+        run: npm ci
+      - name: Step3 - Lint
+        run: npm run lint
+  test:
+    runs-on: ubuntu-latest
+    needs: lint
+    steps:
+      - name: Step1 - Checkout code
+        uses: actions/checkout@v4
+      - name: Cache dependencies
+        uses: actions/cache@v3
+        with:
+          path: ~/.npm
+          key: deps-node-modules-${{ hashFiles('**/package-lock.json') }}
+      - name: Step2 - Install dependencies
+        run: npm ci
+      - name: Step3 - Lint
+        run: npm run lint
+      - name: Step4 - Run tests
+        run: npm test
+  build:
+    runs-on: ubuntu-latest
+    needs: test
+    outputs:
+      js-filename: ${{ steps.publish-js-filename.outputs.jsFile }}
+    steps:
+      - name: Step1 - Checkout code
+        uses: actions/checkout@v4
+      - name: Cache dependencies
+        uses: actions/cache@v3
+        with:
+          path: ~/.npm
+          key: deps-node-modules-${{ hashFiles('**/package-lock.json') }}
+      - name: Step2 - Install dependencies
+        run: npm ci
+      - name: Step3 - Build project
+        run: npm run build
+      - name: Step4 - Publish js filename
+        id: publish-js-filename
+        run: find dist/assets/*.js -type f -execdir echo 'jsFile={}' >> $GITHUB_OUTPUT ';'
+      - name: Step5 - Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: artifact-package
+          path: dist
+  deploy:
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - name: Step1 - Output js filename
+        run: echo "JavaScript filename is ${{ needs.build.outputs.js-filename }}"
+      - name: Step2 - Download artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: artifact-package
+      - name: Step3 - List artifact contents
+        run: ls -lrta    
+      - name: Step4 - Deploy project
+        run: echo "Deploying application..."
